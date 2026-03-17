@@ -3,7 +3,7 @@ import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="Sleep & Fasting Visualizer", page_icon="🌙", layout="wide")
+st.set_page_config(page_title="SleepPhy", page_icon="🌙", layout="wide")
 
 # --- HELPER FUNCTIONS ---
 def time_to_datetime(target_time, base_time, base_date):
@@ -29,7 +29,7 @@ def get_time_str(dt):
     return dt.strftime("%I:%M %p").lstrip("0") # lstrip removes leading zeros (e.g., '08' -> '8')
 
 # --- UI LOGIC ---
-st.title("🌙 Sleep & Fasting Timeline Visualizer")
+st.title("🌙 Sleep Hygiene Visualizer")
 st.markdown("Enter your metrics below to generate a layered timeline of your night and calculate your hygiene gaps.")
 
 st.sidebar.header("Log Your Night")
