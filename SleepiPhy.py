@@ -1,10 +1,11 @@
 import streamlit as st
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 from datetime import datetime, date, timedelta
-import pytz # Added to handle timezone correctly on cloud servers
+import io # <-- NEW: Required for saving the image to memory
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="SleepiPhy", page_icon="🌙", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="SleepiPhy", page_icon="🌙", layout="wide")
 
 # --- HELPER FUNCTIONS ---
 def time_to_datetime(target_time, base_time, base_date):
@@ -20,7 +21,7 @@ def format_timedelta(td):
     """Formats a timedelta object into a clean 'Xh Ym' string."""
     total_seconds = int(td.total_seconds())
     if total_seconds < 0:
-        return "Invalid (Negative)"
+        return "Invalid"
     hours, remainder = divmod(total_seconds, 3600)
     minutes, _ = divmod(remainder, 60)
     return f"{hours}h {minutes}m"
@@ -31,7 +32,7 @@ def get_time_str(dt):
 
 # --- UI LOGIC ---
 st.title("🌙 Comprehensive Sleep & Fasting Report")
-st.markdown("Fill out your details. Hover over the chart and click the **camera icon** to download your complete report.")
+st.markdown("Fill out your details, then click the **Download** button below the chart to save your report.")
 
 # Sidebar: User Details
 st.sidebar.header("User Details")
@@ -50,12 +51,9 @@ first_meal = st.sidebar.time_input("7. First meal after waking", value=datetime.
 
 # --- DATA PROCESSING ---
 base_date = date.today()
-
-# Get local time for the timestamp (Servers default to UTC, this grabs local user time if possible or you can set a specific timezone)
-# Example defaults to system time, but you can explicitly set local tz like pytz.timezone('Asia/Kolkata') if needed.
 current_time_str = datetime.now().strftime("%I:%M %p")
 
-# Convert all times to datetimes relative to bed_start
+# Convert all times to datetimes
 dt_bed_start = datetime.combine(base_date, bed_start)
 dt_bed_end = time_to_datetime(bed_end, bed_start, base_date)
 dt_sleep_start = time_to_datetime(sleep_start, bed_start, base_date)
@@ -72,65 +70,94 @@ screen_to_sleep = dt_sleep_start - dt_screen_time
 fasting_interval = dt_first_meal - dt_last_meal
 efficiency = (approx_sleep.total_seconds() / time_in_bed.total_seconds()) * 100 if time_in_bed.total_seconds() > 0 else 0
 
-# --- VISUALIZATION ---
-fig = go.Figure()
+# --- MATPLOTLIB VISUALIZATION ---
+# Create figure and axis
+fig, ax = plt.subplots(figsize=(12, 6), facecolor='white')
+
+# We will plot the timeline exactly on y=0
+y_level = 0
 
 # Base Layer: Time in Bed
-fig.add_trace(go.Scatter(
-    x=[dt_bed_start, dt_bed_end], y=["Timeline", "Timeline"],
-    mode="lines", line=dict(color="#B0C4DE", width=60), name="Time in Bed", hoverinfo="name"
-))
+ax.plot([dt_bed_start, dt_bed_end], [y_level, y_level], 
+        color="#B0C4DE", linewidth=45, solid_capstyle='butt', label="Time in Bed")
 
 # Top Layer: Approximate Time Slept
-fig.add_trace(go.Scatter(
-    x=[dt_sleep_start, dt_sleep_end], y=["Timeline", "Timeline"],
-    mode="lines", line=dict(color="#4169E1", width=30), name="Approx. Sleep", hoverinfo="name"
-))
-
-# Annotations (Time Labels)
-fig.add_annotation(x=dt_bed_start, y="Timeline", text=f"In Bed<br><b>{get_time_str(dt_bed_start)}</b>", showarrow=False, yshift=-45, font=dict(size=11, color="#607B96"))
-fig.add_annotation(x=dt_bed_end, y="Timeline", text=f"Out of Bed<br><b>{get_time_str(dt_bed_end)}</b>", showarrow=False, yshift=-45, font=dict(size=11, color="#607B96"))
-fig.add_annotation(x=dt_sleep_start, y="Timeline", text=f"Decided to Sleep<br><b>{get_time_str(dt_sleep_start)}</b>", showarrow=False, yshift=45, font=dict(size=11, color="#27408B"))
-fig.add_annotation(x=dt_sleep_end, y="Timeline", text=f"Woke Up<br><b>{get_time_str(dt_sleep_end)}</b>", showarrow=False, yshift=45, font=dict(size=11, color="#27408B"))
+ax.plot([dt_sleep_start, dt_sleep_end], [y_level, y_level], 
+        color="#4169E1", linewidth=25, solid_capstyle='butt', label="Approx. Sleep")
 
 # Vertical Lines
-fig.add_vline(x=dt_last_meal.timestamp() * 1000, line_dash="dot", line_color="orange", annotation_text=f"Last Meal<br><b>{get_time_str(dt_last_meal)}</b>", annotation_position="top left", annotation_font_color="orange")
-fig.add_vline(x=dt_screen_time.timestamp() * 1000, line_dash="dash", line_color="red", annotation_text=f"Last Screen<br><b>{get_time_str(dt_screen_time)}</b>", annotation_position="bottom right", annotation_font_color="red")
-fig.add_vline(x=dt_first_meal.timestamp() * 1000, line_dash="dot", line_color="green", annotation_text=f"First Meal<br><b>{get_time_str(dt_first_meal)}</b>", annotation_position="top right", annotation_font_color="green")
+ax.axvline(x=dt_last_meal, color="orange", linestyle=":", linewidth=2)
+ax.axvline(x=dt_screen_time, color="red", linestyle="--", linewidth=2)
+ax.axvline(x=dt_first_meal, color="green", linestyle=":", linewidth=2)
 
-# --- EMBEDDING METRICS INTO THE CHART ---
-metrics_html = (
-    f"<b>Time in Bed:</b> {format_timedelta(time_in_bed)} &nbsp;&nbsp;|&nbsp;&nbsp; "
-    f"<b>Approx. Sleep:</b> {format_timedelta(approx_sleep)} &nbsp;&nbsp;|&nbsp;&nbsp; "
-    f"<b>Est. Efficiency:</b> {efficiency:.1f}%<br>"
-    f"<b>Last Meal to Lights Out:</b> {format_timedelta(meal_to_sleep)} &nbsp;&nbsp;|&nbsp;&nbsp; "
-    f"<b>Screen to Lights Out:</b> {format_timedelta(screen_to_sleep)} &nbsp;&nbsp;|&nbsp;&nbsp; "
-    f"<b>Fasting Window:</b> {format_timedelta(fasting_interval)}"
-)
+# Annotations (Time Labels)
+font_props = dict(ha='center', fontsize=10, weight='bold')
 
-fig.add_annotation(
-    xref="paper", yref="paper", x=0.5, y=-0.4,
-    showarrow=False, text=metrics_html, font=dict(size=13, color="#333"),
-    align="center", bgcolor="#F4F6F9", bordercolor="#D1D5DB", borderwidth=1, borderpad=10
-)
+# Below the line annotations
+ax.text(dt_bed_start, y_level - 0.2, f"In Bed\n{get_time_str(dt_bed_start)}", color="#607B96", va='top', **font_props)
+ax.text(dt_bed_end, y_level - 0.2, f"Out of Bed\n{get_time_str(dt_bed_end)}", color="#607B96", va='top', **font_props)
+ax.text(dt_screen_time, y_level - 0.45, f"Last Screen\n{get_time_str(dt_screen_time)}", color="red", va='top', **font_props)
+
+# Above the line annotations
+ax.text(dt_sleep_start, y_level + 0.2, f"Decided to Sleep\n{get_time_str(dt_sleep_start)}", color="#27408B", va='bottom', **font_props)
+ax.text(dt_sleep_end, y_level + 0.2, f"Woke Up\n{get_time_str(dt_sleep_end)}", color="#27408B", va='bottom', **font_props)
+ax.text(dt_last_meal, y_level + 0.45, f"Last Meal\n{get_time_str(dt_last_meal)}", color="orange", va='bottom', **font_props)
+ax.text(dt_first_meal, y_level + 0.45, f"First Meal\n{get_time_str(dt_first_meal)}", color="green", va='bottom', **font_props)
 
 # Layout Formatting
+ax.set_ylim(-1, 1) # Give the text room to breathe
+ax.set_xlim(dt_last_meal - timedelta(minutes=30), dt_first_meal + timedelta(minutes=30)) # Add padding to sides
+
+# Hide axes completely to maintain the clean, floating look
+ax.get_yaxis().set_visible(False)
+ax.get_xaxis().set_visible(False)
+for spine in ax.spines.values():
+    spine.set_visible(False)
+
+# Explicitly positioning Title, Subtitle, and Legend
 report_date = base_date.strftime('%B %d, %Y')
-fig.update_layout(
-    title=dict(
-        text=f"<b>Nightly Sleep & Fasting Report</b><br><span style='font-size:14px; color:gray;'>User: {user_name} (Age: {user_age}) | Generated: {report_date} at {current_time_str}</span>",
-        x=0.5,
-        xanchor='center'
-    ),
-    # THE FIX IS HERE: type='date' forces a chronological scale regardless of the environment
-    xaxis=dict(type='date', showticklabels=False, gridcolor='rgba(0,0,0,0)', zeroline=False),
-    yaxis=dict(showticklabels=False, zeroline=False),
-    plot_bgcolor="white",
-    paper_bgcolor="white", 
-    height=550, 
-    margin=dict(t=120, b=150, l=40, r=40),
-    legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5)
+fig.text(0.5, 0.95, "Nightly Sleep & Fasting Report", ha='center', fontsize=16, weight='bold')
+fig.text(0.5, 0.89, f"User: {user_name} (Age: {user_age}) | Generated: {report_date} at {current_time_str}", ha='center', fontsize=10, color='gray')
+
+# Place legend cleanly above the plotting area
+ax.legend(loc='lower center', bbox_to_anchor=(0.5, 1.05), ncol=2, frameon=False, fontsize=11)
+
+# --- EMBEDDING METRICS INTO THE CHART ---
+metrics_text = (
+    f"Time in Bed: {format_timedelta(time_in_bed)}   |   "
+    f"Approx. Sleep: {format_timedelta(approx_sleep)}   |   "
+    f"Est. Efficiency: {efficiency:.1f}%\n"
+    f"Last Meal to Lights Out: {format_timedelta(meal_to_sleep)}   |   "
+    f"Screen to Lights Out: {format_timedelta(screen_to_sleep)}   |   "
+    f"Fasting Window: {format_timedelta(fasting_interval)}"
 )
 
-# Render Plotly Chart
-st.plotly_chart(fig, use_container_width=True)
+# Place text box at the bottom of the figure
+fig.text(0.5, 0.05, metrics_text, ha='center', va='center', fontsize=11, linespacing=1.8,
+         bbox=dict(facecolor='#F4F6F9', edgecolor='#D1D5DB', boxstyle='round,pad=1'))
+
+# Adjusted top spacing from 0.8 to 0.75 so the chart stays clear of the title
+plt.subplots_adjust(bottom=0.25, top=0.75)
+
+# Render Matplotlib Chart in Streamlit
+st.pyplot(fig, use_container_width=True)
+
+# --- NEW: DOWNLOAD IMAGE CAPABILITY ---
+# Save the figure to an in-memory buffer
+buf = io.BytesIO()
+# bbox_inches='tight' ensures that all external text (like the title and metrics box) is included in the saved image
+fig.savefig(buf, format="png", bbox_inches="tight", dpi=300, facecolor='white')
+buf.seek(0)
+
+# Create the Streamlit download button
+col_dl1, col_dl2, col_dl3 = st.columns([1, 2, 1])
+with col_dl2:
+    st.download_button(
+        label="📥 Download Chart as Image",
+        data=buf,
+        file_name=f"Sleep_Report_{user_name.replace(' ', '_')}_{base_date.strftime('%Y%m%d')}.png",
+        mime="image/png",
+        use_container_width=True
+    )
+
+st.markdown("---")
