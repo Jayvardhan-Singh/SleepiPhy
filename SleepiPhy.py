@@ -1,9 +1,10 @@
 import streamlit as st
 import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
+import pytz # Added to handle timezone correctly on cloud servers
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="SleepiPhy", page_icon="🌙", initial_sidebar_state="expanded")
+st.set_page_config(page_title="SleepiPhy", page_icon="🌙", layout="wide", initial_sidebar_state="expanded")
 
 # --- HELPER FUNCTIONS ---
 def time_to_datetime(target_time, base_time, base_date):
@@ -49,6 +50,9 @@ first_meal = st.sidebar.time_input("7. First meal after waking", value=datetime.
 
 # --- DATA PROCESSING ---
 base_date = date.today()
+
+# Get local time for the timestamp (Servers default to UTC, this grabs local user time if possible or you can set a specific timezone)
+# Example defaults to system time, but you can explicitly set local tz like pytz.timezone('Asia/Kolkata') if needed.
 current_time_str = datetime.now().strftime("%I:%M %p")
 
 # Convert all times to datetimes relative to bed_start
@@ -110,21 +114,22 @@ fig.add_annotation(
     align="center", bgcolor="#F4F6F9", bordercolor="#D1D5DB", borderwidth=1, borderpad=10
 )
 
-# Layout Formatting (Fixed Title Visibility & Clear Margins)
+# Layout Formatting
 report_date = base_date.strftime('%B %d, %Y')
 fig.update_layout(
     title=dict(
         text=f"<b>Nightly Sleep & Fasting Report</b><br><span style='font-size:14px; color:gray;'>User: {user_name} (Age: {user_age}) | Generated: {report_date} at {current_time_str}</span>",
-        x=0.5, # Centers the title
+        x=0.5,
         xanchor='center'
     ),
-    xaxis=dict(showticklabels=False, gridcolor='rgba(0,0,0,0)', zeroline=False),
+    # THE FIX IS HERE: type='date' forces a chronological scale regardless of the environment
+    xaxis=dict(type='date', showticklabels=False, gridcolor='rgba(0,0,0,0)', zeroline=False),
     yaxis=dict(showticklabels=False, zeroline=False),
     plot_bgcolor="white",
     paper_bgcolor="white", 
     height=550, 
-    margin=dict(t=120, b=150, l=40, r=40), # Increased top margin (t=120) for title clarity
-    legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5) # Centered legend beneath title
+    margin=dict(t=120, b=150, l=40, r=40),
+    legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5)
 )
 
 # Render Plotly Chart
