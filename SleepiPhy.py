@@ -3,7 +3,7 @@ import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="SleepiPhy", page_icon="🌙", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="SleepiPhy", page_icon="🌙", initial_sidebar_state="expanded")
 
 # --- HELPER FUNCTIONS ---
 def time_to_datetime(target_time, base_time, base_date):
