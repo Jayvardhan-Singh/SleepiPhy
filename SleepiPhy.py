@@ -38,6 +38,8 @@ st.markdown("Fill out your details, then click the **Download** button below the
 st.sidebar.header("User Details")
 user_name = st.sidebar.text_input("Name", value="Sleepyhead")
 user_age = st.sidebar.number_input("Age", min_value=1, max_value=120, value=30)
+# NEW: Allow user to pick the exact date of the report
+base_date = st.sidebar.date_input("Report Date", value=date.today())
 
 # Sidebar: Chronological Night Log
 st.sidebar.header("Log Your Timeline")
@@ -49,9 +51,6 @@ sleep_end = st.sidebar.time_input("5. Woke up", value=datetime.strptime("06:30",
 bed_end = st.sidebar.time_input("6. Got out of bed", value=datetime.strptime("07:00", "%H:%M").time())
 first_meal = st.sidebar.time_input("7. First meal after waking", value=datetime.strptime("08:30", "%H:%M").time())
 
-# --- DATA PROCESSING ---
-base_date = date.today()
-current_time_str = datetime.now().strftime("%I:%M %p")
 
 # Convert all times to datetimes
 dt_bed_start = datetime.combine(base_date, bed_start)
