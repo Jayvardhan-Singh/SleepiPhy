@@ -2,7 +2,8 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from datetime import datetime, date, timedelta
-import io # <-- NEW: Required for saving the image to memory
+import io
+
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="SleepiPhy", page_icon="🌙", layout="wide")
@@ -32,10 +33,10 @@ def get_time_str(dt):
 
 # --- UI LOGIC ---
 st.title("🌙 Comprehensive Sleep & Fasting Report")
-st.markdown("Fill out your details, then click the **Download** button below the chart to save your report.")
+st.markdown("Fill out your details chronologically, then click the **Download** button below the chart to save your report.")
 
-# Sidebar: User Details
-st.sidebar.header("User Details")
+# Sidebar: User Details & Date
+st.sidebar.header("Report Details")
 user_name = st.sidebar.text_input("Name", value="Sleepyhead")
 user_age = st.sidebar.number_input("Age", min_value=1, max_value=120, value=30)
 # NEW: Allow user to pick the exact date of the report
@@ -51,7 +52,7 @@ sleep_end = st.sidebar.time_input("5. Woke up", value=datetime.strptime("06:30",
 bed_end = st.sidebar.time_input("6. Got out of bed", value=datetime.strptime("07:00", "%H:%M").time())
 first_meal = st.sidebar.time_input("7. First meal after waking", value=datetime.strptime("08:30", "%H:%M").time())
 
-
+# --- DATA PROCESSING ---
 # Convert all times to datetimes
 dt_bed_start = datetime.combine(base_date, bed_start)
 dt_bed_end = time_to_datetime(bed_end, bed_start, base_date)
@@ -107,16 +108,17 @@ ax.text(dt_first_meal, y_level + 0.45, f"First Meal\n{get_time_str(dt_first_meal
 ax.set_ylim(-1, 1) # Give the text room to breathe
 ax.set_xlim(dt_last_meal - timedelta(minutes=30), dt_first_meal + timedelta(minutes=30)) # Add padding to sides
 
-# Hide axes completely to maintain the clean, floating look
+# Hide axes completely
 ax.get_yaxis().set_visible(False)
 ax.get_xaxis().set_visible(False)
 for spine in ax.spines.values():
     spine.set_visible(False)
 
 # Explicitly positioning Title, Subtitle, and Legend
-report_date = base_date.strftime('%B %d, %Y')
+report_date_str = base_date.strftime('%B %d, %Y')
 fig.text(0.5, 0.95, "Nightly Sleep & Fasting Report", ha='center', fontsize=16, weight='bold')
-fig.text(0.5, 0.89, f"User: {user_name} (Age: {user_age}) | Generated: {report_date} at {current_time_str}", ha='center', fontsize=10, color='gray')
+# NEW: Simplified subtitle string
+fig.text(0.5, 0.89, f"User: {user_name} (Age: {user_age}) | Date: {report_date_str}", ha='center', fontsize=10, color='gray')
 
 # Place legend cleanly above the plotting area
 ax.legend(loc='lower center', bbox_to_anchor=(0.5, 1.05), ncol=2, frameon=False, fontsize=11)
@@ -135,16 +137,14 @@ metrics_text = (
 fig.text(0.5, 0.05, metrics_text, ha='center', va='center', fontsize=11, linespacing=1.8,
          bbox=dict(facecolor='#F4F6F9', edgecolor='#D1D5DB', boxstyle='round,pad=1'))
 
-# Adjusted top spacing from 0.8 to 0.75 so the chart stays clear of the title
+# Adjusted top spacing
 plt.subplots_adjust(bottom=0.25, top=0.75)
 
 # Render Matplotlib Chart in Streamlit
 st.pyplot(fig, use_container_width=True)
 
-# --- NEW: DOWNLOAD IMAGE CAPABILITY ---
-# Save the figure to an in-memory buffer
+# --- DOWNLOAD IMAGE CAPABILITY ---
 buf = io.BytesIO()
-# bbox_inches='tight' ensures that all external text (like the title and metrics box) is included in the saved image
 fig.savefig(buf, format="png", bbox_inches="tight", dpi=300, facecolor='white')
 buf.seek(0)
 
