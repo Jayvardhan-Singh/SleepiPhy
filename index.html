@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, shrink-to-fit=no"
+    />
+    <title>SleepiPhy Web</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@stlite/mountable@0.31.0/build/stlite.css"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="https://cdn.jsdelivr.net/npm/@stlite/mountable@0.31.0/build/stlite.js"></script>
+    <script>
+      stlite.mount(
+        {
+          requirements: ["matplotlib"],
+          entrypoint: "app.py",
+          files: {
+            "app.py": `
+import streamlit as st
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from datetime import datetime, date, timedelta
+import io
+
+# --- PAGE CONFIGURATION ---
+st.set_page_config(page_title="SleepiPhy", page_icon="🌙", layout="wide")
+
+# --- HELPER FUNCTIONS ---
+def time_to_datetime(target_time, base_time, base_date):
+    dt = datetime.combine(base_date, target_time)
+    if base_time.hour >= 12 and target_time.hour < 12:
+        dt += timedelta(days=1)
+    elif base_time.hour < 12 and target_time.hour >= 12:
+        dt -= timedelta(days=1)
+    return dt
+
+def format_timedelta(td):
+    total_seconds = int(td.total_seconds())
+    if total_seconds < 0:
+        return "Invalid"
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, _ = divmod(remainder, 60)
+    return f"{hours}h {minutes}m"
+
+def get_time_str(dt):
+    return dt.strftime("%I:%M %p").lstrip("0")
+
+# --- UI LOGIC ---
+st.title("🌙 Comprehensive Sleep & Fasting Report")
+st.markdown("Fill out your details chronologically, then click the **Download** button below the chart to save your report.")
+
+st.sidebar.header("Report Details")
+user_name = st.sidebar.text_input("Name", value="Sleepyhead")
+user_age = st.sidebar.number_input("Age", min_value=1, max_value=120, value=30)
+base_date = st.sidebar.date_input("Report Date", value=date.today())
+
+st.sidebar.header("Log Your Timeline")
+last_meal = st.sidebar.time_input("1. Last meal before bed", value=datetime.strptime("19:30", "%H:%M").time())
+screen_time = st.sidebar.time_input("2. Last screen time", value=datetime.strptime("22:45", "%H:%M").time())
+bed_start = st.sidebar.time_input("3. Got into bed", value=datetime.strptime("22:00", "%H:%M").time())
+sleep_start = st.sidebar.time_input("4. Decided to sleep (Lights out)", value=datetime.strptime("23:00", "%H:%M").time())
+sleep_end = st.sidebar.time_input("5. Woke up", value=datetime.strptime("06:30", "%H:%M").time())
+bed_end = st.sidebar.time_input("6. Got out of bed", value=datetime.strptime("07:00", "%H:%M").time())
+first_meal = st.sidebar.time_input("7. First meal after waking", value=datetime.strptime("08:30", "%H:%M").time())
+
+# --- DATA PROCESSING ---
+dt_bed_start = datetime.combine(base_date, bed_start)
+dt_bed_end = time_to_datetime(bed_end, bed_start, base_date)
+dt_sleep_start = time_to_datetime(sleep_start, bed_start, base_date)
+dt_sleep_end = time_to_datetime(sleep_end, bed_start, base_date)
+dt_last_meal = time_to_datetime(last_meal, bed_start, base_date)
+dt_screen_time = time_to_datetime(screen_time, bed_start, base_date)
+dt_first_meal = time_to_datetime(first_meal, bed_start, base_date)
+
+time_in_bed = dt_bed_end - dt_bed_start
+approx_sleep = dt_sleep_end - dt_sleep_start
+meal_to_sleep = dt_sleep_start - dt_last_meal
+screen_to_sleep = dt_sleep_start - dt_screen_time
+fasting_interval = dt_first_meal - dt_last_meal
+efficiency = (approx_sleep.total_seconds() / time_in_bed.total_seconds()) * 100 if time_in_bed.total_seconds() > 0 else 0
+
+# --- MATPLOTLIB VISUALIZATION ---
+fig, ax = plt.subplots(figsize=(12, 6), facecolor='white')
+y_level = 0
+
+ax.plot([dt_bed_start, dt_bed_end], [y_level, y_level], color="#B0C4DE", linewidth=45, solid_capstyle='butt', label="Time in Bed")
+ax.plot([dt_sleep_start, dt_sleep_end], [y_level, y_level], color="#4169E1", linewidth=25, solid_capstyle='butt', label="Approx. Sleep")
+ax.axvline(x=dt_last_meal, color="orange", linestyle=":", linewidth=2)
+ax.axvline(x=dt_screen_time, color="red", linestyle="--", linewidth=2)
+ax.axvline(x=dt_first_meal, color="green", linestyle=":", linewidth=2)
+
+font_props = dict(ha='center', fontsize=10, weight='bold')
+ax.text(dt_bed_start, y_level - 0.2, f"In Bed\\n{get_time_str(dt_bed_start)}", color="#607B96", va='top', **font_props)
+ax.text(dt_bed_end, y_level - 0.2, f"Out of Bed\\n{get_time_str(dt_bed_end)}", color="#607B96", va='top', **font_props)
+ax.text(dt_screen_time, y_level - 0.45, f"Last Screen\\n{get_time_str(dt_screen_time)}", color="red", va='top', **font_props)
+ax.text(dt_sleep_start, y_level + 0.2, f"Decided to Sleep\\n{get_time_str(dt_sleep_start)}", color="#27408B", va='bottom', **font_props)
+ax.text(dt_sleep_end, y_level + 0.2, f"Woke Up\\n{get_time_str(dt_sleep_end)}", color="#27408B", va='bottom', **font_props)
+ax.text(dt_last_meal, y_level + 0.45, f"Last Meal\\n{get_time_str(dt_last_meal)}", color="orange", va='bottom', **font_props)
+ax.text(dt_first_meal, y_level + 0.45, f"First Meal\\n{get_time_str(dt_first_meal)}", color="green", va='bottom', **font_props)
+
+ax.set_ylim(-1, 1)
+ax.set_xlim(dt_last_meal - timedelta(minutes=30), dt_first_meal + timedelta(minutes=30))
+
+ax.get_yaxis().set_visible(False)
+ax.get_xaxis().set_visible(False)
+for spine in ax.spines.values():
+    spine.set_visible(False)
+
+report_date_str = base_date.strftime('%B %d, %Y')
+fig.text(0.5, 0.95, "Nightly Sleep & Fasting Report", ha='center', fontsize=16, weight='bold')
+fig.text(0.5, 0.89, f"User: {user_name} (Age: {user_age}) | Date: {report_date_str}", ha='center', fontsize=10, color='gray')
+ax.legend(loc='lower center', bbox_to_anchor=(0.5, 1.05), ncol=2, frameon=False, fontsize=11)
+
+metrics_text = (
+    f"Time in Bed: {format_timedelta(time_in_bed)}   |   "
+    f"Approx. Sleep: {format_timedelta(approx_sleep)}   |   "
+    f"Est. Efficiency: {efficiency:.1f}%\\n"
+    f"Last Meal to Lights Out: {format_timedelta(meal_to_sleep)}   |   "
+    f"Screen to Lights Out: {format_timedelta(screen_to_sleep)}   |   "
+    f"Fasting Window: {format_timedelta(fasting_interval)}"
+)
+fig.text(0.5, 0.05, metrics_text, ha='center', va='center', fontsize=11, linespacing=1.8,
+         bbox=dict(facecolor='#F4F6F9', edgecolor='#D1D5DB', boxstyle='round,pad=1'))
+plt.subplots_adjust(bottom=0.25, top=0.75)
+
+st.pyplot(fig, use_container_width=True)
+
+buf = io.BytesIO()
+fig.savefig(buf, format="png", bbox_inches="tight", dpi=300, facecolor='white')
+buf.seek(0)
+
+col_dl1, col_dl2, col_dl3 = st.columns([1, 2, 1])
+with col_dl2:
+    st.download_button(
+        label="📥 Download Chart as Image",
+        data=buf,
+        file_name=f"Sleep_Report_{user_name.replace(' ', '_')}_{base_date.strftime('%Y%m%d')}.png",
+        mime="image/png",
+        use_container_width=True
+    )
+st.markdown("---")
+            `
+          },
+        },
+        document.getElementById("root")
+      );
+    </script>
+  </body>
+</html>
